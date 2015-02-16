@@ -48,7 +48,7 @@ void scanAndPop( sub * * head, int * );
 
 int main (int argc, char ** argv)
 {
-    runSimulation( "test1.txt" );
+    runSimulation( "test2.txt" );
 
     return 0;
 }
@@ -68,7 +68,7 @@ void runSimulation( char * filename )
     int avgWaitTime0 = 0;
     int avgWaitTime1 = 0;
     int avgQLength = 0;
-    int time = 1;
+    int time = 0;
     int lastExitTime = -1;
     int lastEntryTime = 0;
     int totalLength = 0;
@@ -181,8 +181,8 @@ void runSimulation( char * filename )
         printf( "\nTime: %d\n\n", time );
         printf( "\nNumber of available processors: %d\n", availProc );
         //qPrint( allTaskHead, "alltask" );
-        //qPrint( q0head, "q0" );
-        //qPrint( q1head, "q1" );
+        qPrint( q0head, "q0" );
+        qPrint( q1head, "q1" );
         subQPrint( processQ, "processQ at end");
 
         time++;
