@@ -48,7 +48,7 @@ void scanAndPop( sub * * head, int * );
 
 int main (int argc, char ** argv)
 {
-    runSimulation( "test2.txt" );
+    runSimulation( "test4.txt" );
 
     return 0;
 }
@@ -63,6 +63,8 @@ void runSimulation( char * filename )
     int toatlTime1 = 0;         //  Total used time by 1 tasks
     int TotalServiceTime0 = 0;
     int TotalServiceTime1 = 0;
+    int totalNumTasks0 = 0;
+    int totalNumTasks1 = 0;
     int waitTime0 = 0;
     int waitTime1 = 0;
     int avgWaitTime0 = 0;
@@ -73,6 +75,9 @@ void runSimulation( char * filename )
     int lastEntryTime = 0;
     int totalLength = 0;
     int i;
+    int q0length = 0;
+    int q1length = 0;
+    int totalNumTasks;
     float cpu = 0;
 
     //	Intializing 0 and 1 task queues
@@ -99,8 +104,10 @@ void runSimulation( char * filename )
     createTaskQueue( &allTaskHead, &allTaskTail, filename );
     qPrint( allTaskHead, "alltask" );
 
+    totalNumTasks = qLength( allTaskHead );
+
     //~~~~  SIMULATION BEGINS HERE
-    while( ( !queueIsEmpty( allTaskHead ) || !queueIsEmpty( q0head ) || !queueIsEmpty( q1head ) || !subQueueIsEmpty( processQ ) ) && time < 25 )
+    while( ( !queueIsEmpty( allTaskHead ) || !queueIsEmpty( q0head ) || !queueIsEmpty( q1head ) || !subQueueIsEmpty( processQ ) ) )
     {
         printf( "\nTime: %d\n\n", time );
         subQPrint( processQ, "processQ at beginning");
@@ -111,6 +118,9 @@ void runSimulation( char * filename )
             scanAndPop( &processQ, &availProc );
         }
 
+        printf( "\nTime: %d\n\n", time );
+        printf( "\nNumber of available processors: %d\n", availProc );
+
         if( !queueIsEmpty( allTaskHead ) )
         {
             //	Take element from allTaskQueue
@@ -119,14 +129,20 @@ void runSimulation( char * filename )
                 //	Pop and put to q1 or q0
                 if ( allTaskHead -> priority == 0 )
                 {
+                    totalNumTasks0++;
                     qPush( &q0head, &q0tail, qPop( &allTaskHead ) );
                 }
                 else if ( allTaskHead -> priority == 1 )
                 {
+                    totalNumTasks1++;
                     qPush( &q1head, &q1tail, qPop( &allTaskHead ) );
                 }
             }
         }
+
+        printf( "\nBefore serving\n" );
+        qPrint( q0head, "q0" );
+        qPrint( q1head, "q1" );
 
         //  While avProc > 0 keep scanning q1 and q0 and not
 
@@ -138,6 +154,7 @@ void runSimulation( char * filename )
             while ( task != NULL )
             {
                 // create subtasks
+                waitTime0 += time - task -> arrivalTime;
                 for ( i = 0; i < task -> numSubTasks; i++ )
                 {
                     sub * subTask = subCreate( task -> subtasks[i], time );
@@ -157,12 +174,12 @@ void runSimulation( char * filename )
         if( !queueIsEmpty( q1head ) )
         {
             //	Take element from q1head
-            //	Take element from q0head
             task = scanQueue( &q1head, availProc );
 
             while ( task != NULL )
             {
                 // create subtasks
+                waitTime1 += time - task -> arrivalTime;
                 for ( i = 0; i < task -> numSubTasks; i++ )
                 {
                     sub * subTask = subCreate( task -> subtasks[i], time );
@@ -174,9 +191,12 @@ void runSimulation( char * filename )
                 // update availProc
                 availProc -= task -> numSubTasks;
 
-                task = scanQueue( &q0head, availProc );
+                task = scanQueue( &q1head, availProc );
             }
         }
+
+        printf( "Printing here!!!!\n");
+        printf( "Wait time = %d %d\nQueuelength = %d\nTotal time = %d\n\n", waitTime0, waitTime1, q0length + q1length, time );
 
         printf( "\nTime: %d\n\n", time );
         printf( "\nNumber of available processors: %d\n", availProc );
@@ -185,13 +205,45 @@ void runSimulation( char * filename )
         qPrint( q1head, "q1" );
         subQPrint( processQ, "processQ at end");
 
+        q0length += qLength( q0head );
+        q1length += qLength( q1head );
+
         time++;
 
         //  Decrease duration in processQ HERE
         decreaseDuration( &processQ );
         //~~~	WHILE LOOP ENDS HERE
     }
+
+    avgQLength = (( q0length + q1length ) / (time));
+    avgWaitTime0 = waitTime0 / totalNumTasks0;
+    avgWaitTime1 = waitTime1 / totalNumTasks1;
+
+    printf( "Wait time = %d %d\nQueuelength = %d\nTotal time = %d\n", waitTime0, waitTime1, q0length + q1length, time );
+    printf( "Average Queue Length: %d\n", avgQLength );
+    printf( "Average Wait Time 0: %d\n", avgWaitTime0 );
+    printf( "Average Wait Time 1: %d\n", avgWaitTime1 );
+
 }
+
+//--	Get queue Length
+
+int qLength( Q * qHead )
+{
+    if( qHead != NULL )
+    {
+        Q * temp = qHead;
+        int count = 1;
+        while( temp -> next != NULL )
+        {
+            temp = temp -> next;
+            count++;
+        }
+        return count;
+    }
+    return 0;
+}
+
 
 //--	To decremened duration at every second
 
@@ -241,6 +293,10 @@ Q * scanQueue( Q * * head, int availProc )
 {
     Q * elementToBeServed = NULL;
     Q * temp = (*head);
+    if( temp != NULL )
+    {
+        printf( "numSubTasks = %d and availProc = %d\n", temp -> numSubTasks, availProc );
+    }
     if ( temp != NULL && temp -> numSubTasks <= availProc )
     {
         //	Pop element from queue and serve
@@ -258,7 +314,6 @@ Q * scanQueue( Q * * head, int availProc )
             temp = temp -> next;
         }
     }
-
     return elementToBeServed;
 }
 
@@ -464,25 +519,6 @@ Q * qPopMiddle( Q * * head )
     return poppedElement;
 }
 
-//--	Get queue Length
-
-int qLength( Q * qHead )
-{
-    if( qHead != NULL )
-    {
-        Q * temp = qHead;
-        int count = 1;
-        while( temp -> next != NULL )
-        {
-            temp = temp -> next;
-            count++;
-        }
-        return count;
-    }
-    return 0;
-}
-
-
 //--	Increase element time for each element in queue
 //--	by 1 as time incremends
 
@@ -559,8 +595,12 @@ void qPrint( Q * qHead, char * string )
             {
                 temp = temp -> next;
             }
+            else
+            {
+                temp = NULL;
+            }
         }
-        while( temp -> next != NULL );
+        while( temp != NULL );
     }
     else
     {
