@@ -42,7 +42,7 @@ int subQueueIsEmpty( sub * head );
 void subQPrint( sub * qHead, char * string );
 Q * scanQueue( Q * * head, int avProc );
 void decreaseDuration( sub * * head );
-void scanAndPop( sub * * head );
+void scanAndPop( sub * * head, int * );
 
 //--	Main
 
@@ -108,7 +108,7 @@ void runSimulation( char * filename )
         if( !subQueueIsEmpty( processQ ) )
         {
             //	Check if anything needs to be popped
-            scanAndPop( &processQ );
+            scanAndPop( &processQ, &availProc );
         }
 
         if( !queueIsEmpty( allTaskHead ) )
@@ -179,7 +179,7 @@ void runSimulation( char * filename )
         }
 
         printf( "\nTime: %d\n\n", time );
-
+        printf( "\nNumber of available processors: %d\n", availProc );
         //qPrint( allTaskHead, "alltask" );
         //qPrint( q0head, "q0" );
         //qPrint( q1head, "q1" );
@@ -207,26 +207,31 @@ void decreaseDuration( sub * * head )
 
 //--	To scan the entire processQ to check if anything needs to be popped
 
-void scanAndPop( sub * * head )
+void scanAndPop( sub * * head, int * availProc )
 {
-    sub * temp = ( * head );
-    if( temp != NULL && temp -> subDuration <= 0 )
+    if( (*head) != NULL && (*head) -> subDuration <= 0 )
     {
         //	Pop
-        sub * element = subPop( &temp );
+        sub * element = subPop( head );
+        ( * availProc )++;
         printf( "\n~~~~1st pop Popping~~~~~\n");
         subQPrint( element, "Process element" );
     }
+    sub * temp = ( * head );
     while( temp != NULL && temp -> next != NULL )
     {
         if( temp -> next -> subDuration <= 0 )
         {
             //	Pop
             sub * element = subPopMiddle( &temp );
+            ( * availProc )++;
             printf( "\n~~~~~~Popping~~~~~~\n");
             subQPrint( element, "Process element" );
         }
-        temp = temp -> next;
+        else
+        {
+            temp = temp -> next;
+        }
     }
 }
 
@@ -248,7 +253,10 @@ Q * scanQueue( Q * * head, int availProc )
             //	Pop element from queue and serve
             qPopMiddle( &temp );
         }
-        temp = temp -> next;
+        else
+        {
+            temp = temp -> next;
+        }
     }
 
     return elementToBeServed;
