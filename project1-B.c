@@ -48,7 +48,7 @@ void scanAndPop( sub * * head, int * );
 
 int main (int argc, char ** argv)
 {
-    runSimulation( "test4.txt" );
+    runSimulation( "test3.txt" );
 
     return 0;
 }
@@ -67,9 +67,9 @@ void runSimulation( char * filename )
     int totalNumTasks1 = 0;
     int waitTime0 = 0;
     int waitTime1 = 0;
-    int avgWaitTime0 = 0;
-    int avgWaitTime1 = 0;
-    int avgQLength = 0;
+    float avgWaitTime0 = 0;
+    float avgWaitTime1 = 0;
+    float avgQLength = 0;
     int time = 0;
     int lastExitTime = -1;
     int lastEntryTime = 0;
@@ -79,6 +79,12 @@ void runSimulation( char * filename )
     int q1length = 0;
     int totalNumTasks;
     float cpu = 0;
+    float avgLBF = 0;
+    float avgCPU = 0;
+    float avgMew = 0;
+    float mewMin = 0;
+    float mewMax = 1000000000000;
+    float totalNumSubtasks = 0;
 
     //	Intializing 0 and 1 task queues
 
@@ -126,6 +132,9 @@ void runSimulation( char * filename )
             //	Take element from allTaskQueue
             while( allTaskHead != NULL && allTaskHead -> arrivalTime == time )
             {
+
+                q0length += qLength( q0head );
+                q1length += qLength( q1head );
                 //	Pop and put to q1 or q0
                 if ( allTaskHead -> priority == 0 )
                 {
@@ -158,8 +167,17 @@ void runSimulation( char * filename )
                 for ( i = 0; i < task -> numSubTasks; i++ )
                 {
                     sub * subTask = subCreate( task -> subtasks[i], time );
-
                     //push subtasks
+                    cpu += subTask -> subDuration;
+                    totalNumSubtasks++;
+                    if( subTask -> subDuration > mewMin )
+                    {
+                        mewMin = subTask -> subDuration;
+                    }
+                    if( subTask -> subDuration < mewMax )
+                    {
+                        mewMax = subTask -> subDuration;
+                    }
                     subPush( subTask, &processQ );
                 }
 
@@ -205,9 +223,6 @@ void runSimulation( char * filename )
         qPrint( q1head, "q1" );
         subQPrint( processQ, "processQ at end");
 
-        q0length += qLength( q0head );
-        q1length += qLength( q1head );
-
         time++;
 
         //  Decrease duration in processQ HERE
@@ -216,13 +231,23 @@ void runSimulation( char * filename )
     }
 
     avgQLength = (( q0length + q1length ) / (time));
-    avgWaitTime0 = waitTime0 / totalNumTasks0;
-    avgWaitTime1 = waitTime1 / totalNumTasks1;
+    avgWaitTime0 = (float)waitTime0 / totalNumTasks0;
+    avgWaitTime1 = (float)waitTime1 / totalNumTasks1;
+    avgCPU = cpu / ( 64 * time );
+    avgMew = cpu / totalNumSubtasks;
+    avgLBF = ( mewMin - mewMax ) / avgMew;
 
     printf( "Wait time = %d %d\nQueuelength = %d\nTotal time = %d\n", waitTime0, waitTime1, q0length + q1length, time );
-    printf( "Average Queue Length: %d\n", avgQLength );
-    printf( "Average Wait Time 0: %d\n", avgWaitTime0 );
-    printf( "Average Wait Time 1: %d\n", avgWaitTime1 );
+    printf( "totalNumTasks0 = %d\ntotalNumTasks1 = %d\n", totalNumTasks0, totalNumTasks1 );
+    printf( "Total time cpus = %f\nTotal time / 64 = %f\n", cpu, cpu/64 );
+    printf( "Total time cpus = %f\nTotal num subtasks = %f\n", cpu, totalNumSubtasks );
+    printf( "mewMin = %f\nmewMax = %f\navgmew = %f\n", mewMin, mewMax, avgMew );
+
+    printf( "Average Queue Length: %.2f\n", avgQLength );
+    printf( "Average Wait Time 0: %.2f\n", avgWaitTime0 );
+    printf( "Average Wait Time 1: %.2f\n", avgWaitTime1 );
+    printf( "Average Processor Utilization: %.2f\n", avgCPU );
+    printf( "Average Load Balancing factor: %.2f\n", avgLBF );
 
 }
 
