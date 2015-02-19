@@ -1,7 +1,22 @@
+/* ****************************
+**
+**  ECE 368 Project 1 Part 2
+**
+**  Title: 64 bit processor simulation
+**
+**  Student 1: Harika Thatukuru
+**  username: hthatuku
+**
+**  Student 2: Tatparya Shankar
+**  username: tshankar
+**
+***************************** */
+
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <stdio.h>
+#include <time.h>
 
 //--	Queue element Structure
 
@@ -10,8 +25,6 @@ typedef struct Q {
     int priority;			//	priority of 0 or 1
     int numSubTasks;		//	number of subtasks
     int subtasks[32];	    //	durations for each subtask
-    int elementProcessTime;	//	max duration of subtasks
-    int elementTotalTime;	//	total time that task is in the system
     struct Q * next;
 } Q;
 
@@ -25,10 +38,11 @@ typedef struct sub {
 
 //--	Function Definitions
 
+void generateInputQueue (  Q * * head, Q * * tail, double lam0, double lam1, double mu, int numTasks );
 void createTaskQueue( Q * * head, Q * * tail, char * filename );
-void runSimulation( char * filename );
-int qLength( Q * qHead );
+void runSimulation( char * filename, int mode, char ** argv );
 void qPrint( Q * qHead, char * string );
+Q * qCreateFEL( int arrivalTime, int priority, int numSubTasks, double mu );
 Q * qCreate( int arrivalTime, int priority, int duration, int * subtasks );
 void qPush( Q * * qHead, Q * * qTail, Q * element );
 Q * qPop( Q * * head );
@@ -44,18 +58,49 @@ Q * scanQueue( Q * * head, int avProc );
 void decreaseDuration( sub * * head );
 void scanAndPop( sub * * head, int * );
 
+Q * FEL_sort(Q * list, int (compar)(int, int));
+Q * FEL_merge(Q * lhs, Q * rhs, int (compar)(int, int));
+int compar (int a, int b);
+int qLength (Q * list);
+
+double randomX ( );
+double randomR( double rate );
+int calcNumSubtasks( );
+int calcArrivalTime ( int prevArrTime, double arrRate );
+int calcServiceTime ( double mu );
+
 //--	Main
 
 int main (int argc, char ** argv)
 {
-    runSimulation( "test3.txt" );
+    int mode = 0;
+    if( argc == 5 )
+    {
+        printf( "In Mode 1:\n\n" );
+        mode = 1;
+    }
+    else if( argc == 2 )
+    {
+        printf( "In Mode 2:\n\n" );
+        mode = 2;
+    }
+    else
+    {
+        printf( "Invalid number of arguments\n" );
+        return 0;
+    }
+
+    time_t t;
+    srand((unsigned) time(&t));
+
+    runSimulation( "test3.txt", mode, argv );
 
     return 0;
 }
 
 //--	Fuctino to run simulations
 
-void runSimulation( char * filename )
+void runSimulation( char * filename, int mode, char ** argv )
 {
     int processors = 64;        //  Total num processors
     int availProc = 64;    //  Available Processors
@@ -105,17 +150,34 @@ void runSimulation( char * filename )
     * 	If yes, serve task, else wait
     */
 
-    //  Create task queue
-    createTaskQueue( &allTaskHead, &allTaskTail, filename );
-    qPrint( allTaskHead, "alltask" );
+    //  Check for mode
+    if( mode == 1 )
+    {
+        double lam0 = atof(argv[1]);
+        double lam1 = atof(argv[2]);
+        double mu = atof(argv[3]);
+        int numTasks = atoi(argv[4]);
+        //  Create task queue for MODE 1
+        generateInputQueue( &allTaskHead, &allTaskTail, lam0, lam1, mu, numTasks );
+        allTaskHead = FEL_sort( allTaskHead, compar );
+    }
+
+    else if( mode == 2 )
+    {
+        char * filename = argv[1];
+        //  Create task queue for MODE 2
+        createTaskQueue( &allTaskHead, &allTaskTail, filename );
+    }
+
+    //qPrint( allTaskHead, "alltask" );
 
     totalNumTasks = qLength( allTaskHead );
 
     //~~~~  SIMULATION BEGINS HERE
     while( ( !queueIsEmpty( allTaskHead ) || !queueIsEmpty( q0head ) || !queueIsEmpty( q1head ) || !subQueueIsEmpty( processQ ) ) )
     {
-        printf( "\nTime: %d\n\n", time );
-        subQPrint( processQ, "processQ at beginning");
+        //printf( "\nTime: %d\n\n", time );
+        //subQPrint( processQ, "processQ at beginning");
 
         if( !subQueueIsEmpty( processQ ) )
         {
@@ -123,8 +185,8 @@ void runSimulation( char * filename )
             scanAndPop( &processQ, &availProc );
         }
 
-        printf( "\nTime: %d\n\n", time );
-        printf( "\nNumber of available processors: %d\n", availProc );
+        //printf( "\nTime: %d\n\n", time );
+        //printf( "\nNumber of available processors: %d\n", availProc );
 
         if( !queueIsEmpty( allTaskHead ) )
         {
@@ -148,9 +210,9 @@ void runSimulation( char * filename )
             }
         }
 
-        printf( "\nBefore serving\n" );
-        qPrint( q0head, "q0" );
-        qPrint( q1head, "q1" );
+        //printf( "\nBefore serving\n" );
+        //qPrint( q0head, "q0" );
+        //qPrint( q1head, "q1" );
 
         //  While avProc > 0 keep scanning q1 and q0 and not
 
@@ -200,6 +262,7 @@ void runSimulation( char * filename )
                 for ( i = 0; i < task -> numSubTasks; i++ )
                 {
                     sub * subTask = subCreate( task -> subtasks[i], time );
+                    //push subtasks
                     cpu += subTask -> subDuration;
                     totalNumSubtasks++;
                     if( subTask -> subDuration > mewMin )
@@ -221,15 +284,15 @@ void runSimulation( char * filename )
             }
         }
 
-        printf( "Printing here!!!!\n");
-        printf( "Wait time = %d %d\nQueuelength = %d\nTotal time = %d\n\n", waitTime0, waitTime1, q0length + q1length, time );
+        //printf( "Printing here!!!!\n");
+        //printf( "Wait time = %d %d\nQueuelength = %d\nTotal time = %d\n\n", waitTime0, waitTime1, q0length + q1length, time );
 
-        printf( "\nTime: %d\n\n", time );
-        printf( "\nNumber of available processors: %d\n", availProc );
+        //printf( "\nTime: %d\n\n", time );
+        //printf( "\nNumber of available processors: %d\n", availProc );
         //qPrint( allTaskHead, "alltask" );
-        qPrint( q0head, "q0" );
-        qPrint( q1head, "q1" );
-        subQPrint( processQ, "processQ at end");
+        //qPrint( q0head, "q0" );
+        //qPrint( q1head, "q1" );
+        //subQPrint( processQ, "processQ at end");
 
         time++;
 
@@ -245,11 +308,11 @@ void runSimulation( char * filename )
     avgMew = cpu / totalNumSubtasks;
     avgLBF = ( mewMin - mewMax ) / avgMew;
 
-    printf( "Wait time = %d %d\nQueuelength = %d\nTotal time = %d\n", waitTime0, waitTime1, q0length + q1length, time );
-    printf( "totalNumTasks0 = %d\ntotalNumTasks1 = %d\n", totalNumTasks0, totalNumTasks1 );
-    printf( "Total time cpus = %f\nTotal time / 64 = %f\n", cpu, cpu/64 );
-    printf( "Total time cpus = %f\nTotal num subtasks = %f\n", cpu, totalNumSubtasks );
-    printf( "mewMin = %f\nmewMax = %f\navgmew = %f\n", mewMin, mewMax, avgMew );
+    //printf( "Wait time = %d %d\nQueuelength = %d\nTotal time = %d\n", waitTime0, waitTime1, q0length + q1length, time );
+    //printf( "totalNumTasks0 = %d\ntotalNumTasks1 = %d\n", totalNumTasks0, totalNumTasks1 );
+    //printf( "Total time cpus = %f\nTotal time / 64 = %f\n", cpu, cpu/64 );
+    //printf( "Total time cpus = %f\nTotal num subtasks = %f\n", cpu, totalNumSubtasks );
+    //printf( "mewMin = %f\nmewMax = %f\navgmew = %f\n", mewMin, mewMax, avgMew );
 
     printf( "Average Wait Time 0: %.2f\n", avgWaitTime0 );
     printf( "Average Wait Time 1: %.2f\n", avgWaitTime1 );
@@ -261,22 +324,23 @@ void runSimulation( char * filename )
 
 //--	Get queue Length
 
-int qLength( Q * qHead )
+int qLength (Q * list)
 {
-    if( qHead != NULL )
-    {
-        Q * temp = qHead;
-        int count = 1;
-        while( temp -> next != NULL )
-        {
-            temp = temp -> next;
-            count++;
-        }
-        return count;
-    }
-    return 0;
-}
+    int length;
 
+    if(list == NULL)
+    {
+        length = 0;
+    }
+
+    else
+
+    {
+        length = qLength (list -> next) + 1;
+    }
+
+    return length;
+}
 
 //--	To decremened duration at every second
 
@@ -299,8 +363,8 @@ void scanAndPop( sub * * head, int * availProc )
         //	Pop
         sub * element = subPop( head );
         ( * availProc )++;
-        printf( "\n~~~~1st pop Popping~~~~~\n");
-        subQPrint( element, "Process element" );
+        //printf( "\n~~~~1st pop Popping~~~~~\n");
+        //subQPrint( element, "Process element" );
     }
     sub * temp = ( * head );
     while( temp != NULL && temp -> next != NULL )
@@ -310,8 +374,8 @@ void scanAndPop( sub * * head, int * availProc )
             //	Pop
             sub * element = subPopMiddle( &temp );
             ( * availProc )++;
-            printf( "\n~~~~~~Popping~~~~~~\n");
-            subQPrint( element, "Process element" );
+            //printf( "\n~~~~~~Popping~~~~~~\n");
+            //subQPrint( element, "Process element" );
         }
         else
         {
@@ -328,7 +392,7 @@ Q * scanQueue( Q * * head, int availProc )
     Q * temp = (*head);
     if( temp != NULL )
     {
-        printf( "numSubTasks = %d and availProc = %d\n", temp -> numSubTasks, availProc );
+        //printf( "numSubTasks = %d and availProc = %d\n", temp -> numSubTasks, availProc );
     }
     if ( temp != NULL && temp -> numSubTasks <= availProc )
     {
@@ -451,6 +515,43 @@ int subQueueIsEmpty( sub * head )
     }
 }
 
+//--	Gererate task queue using
+
+void generateInputQueue (  Q * * head, Q * * tail, double lam0, double lam1, double mu, int numTasks )
+{
+    int arrivalTime = 0;
+    int numSubtasks = 0;
+    int prevArrTime = 0;
+    int i = 0;
+    Q * element = NULL;
+
+    for( i = 1; i <= numTasks; i++ )
+    {
+        //	Create the Q for 0s
+        arrivalTime = calcArrivalTime( prevArrTime, lam0 );
+        prevArrTime = arrivalTime;
+        numSubtasks = calcNumSubtasks( );
+        //	Create Q element
+        element = qCreateFEL( arrivalTime, 0, numSubtasks, mu );
+        //	Push to Q queue
+        qPush( &(*head), &(*tail), element );
+    }
+
+    prevArrTime = 0;
+
+    for( i = 1; i <= numTasks; i++ )
+    {
+        //	Create the Q for 0s
+        arrivalTime = calcArrivalTime( prevArrTime, lam1 );
+        prevArrTime = arrivalTime;
+        numSubtasks = calcNumSubtasks( );
+        //	Create Q element
+        element = qCreateFEL( arrivalTime, 1, numSubtasks, mu );
+        //	Push to Q queue
+        qPush( &(*head), &(*tail), element );
+    }
+}
+
 //--	To create the task queue
 
 void createTaskQueue( Q * * head, Q * * tail, char * filename )
@@ -483,7 +584,6 @@ void createTaskQueue( Q * * head, Q * * tail, char * filename )
         Q * element = qCreate( arrivalTime, priority, numSubTasks, subtasks );
         qPush( &(*head), &(*tail), element );
     }
-
 }
 
 //--	To create the queue element
@@ -491,16 +591,47 @@ void createTaskQueue( Q * * head, Q * * tail, char * filename )
 Q * qCreate( int arrivalTime, int priority, int numSubTasks, int * subtasks )
 {
     int i = 0;
+    //	Allocate memory
     Q * element = malloc( sizeof(Q) );
+
+    //	Fill in data
     element -> arrivalTime = arrivalTime;
     element -> priority = priority;
     element -> numSubTasks = numSubTasks;
+
+    //	Create the subTask array
     for( i = 0; i < numSubTasks; i++ )
     {
         element -> subtasks[i] = subtasks[i];
-        element -> next = NULL;
-        element -> elementTotalTime = 0;
     }
+
+    element -> next = NULL;
+
+    return element;
+}
+
+//--	To create the queue element
+
+Q * qCreateFEL( int arrivalTime, int priority, int numSubTasks, double mu )
+{
+    int i = 0;
+    //	Allocate memory
+    Q * element = malloc( sizeof( Q ) );
+
+    //	Fill in data
+    element -> arrivalTime = arrivalTime;
+    element -> priority = priority;
+    element -> numSubTasks = numSubTasks;
+
+    //	Create the subTask array
+    for( i = 0; i < numSubTasks; i++ )
+    {
+        //  Calc service time for each element in array
+        element -> subtasks[i] = calcServiceTime( mu );
+    }
+
+    element -> next = NULL;
+
     return element;
 }
 
@@ -552,22 +683,7 @@ Q * qPopMiddle( Q * * head )
     return poppedElement;
 }
 
-//--	Increase element time for each element in queue
-//--	by 1 as time incremends
-
-void incTime( Q * qHead )
-{
-    if( qHead != NULL )
-    {
-        Q * temp = qHead;
-        while( temp -> next != NULL )
-        {
-            temp -> elementTotalTime++;
-            temp = temp -> next;
-        }
-        temp -> elementTotalTime++;
-    }
-}
+//--    Printing processQ
 
 void subQPrint( sub * qHead, char * string )
 {
@@ -639,4 +755,168 @@ void qPrint( Q * qHead, char * string )
     {
         printf("\nQueue %s is empty!!!\n\n", string);
     }
+}
+
+//--	Compare function for merge sort
+
+int compar (int a, int b)
+{
+    return ( a - b );
+}
+
+//--	Merge function for merge sort
+
+Q * FEL_merge(Q * lhs, Q * rhs, int (compar)(int, int))
+{
+    //special case
+    if (lhs == NULL)
+    {
+        return rhs;
+    }
+    if (rhs == NULL)
+    {
+        return lhs;
+    }
+
+    //normal case
+
+    Q * head = NULL;
+    Q * tail = NULL;
+
+    while (lhs != NULL && rhs != NULL)
+    {
+        int cmp = compar ((lhs -> arrivalTime), (rhs -> arrivalTime));
+        //left smaller than right
+        if (cmp <= 0)
+        {
+
+            if(tail == NULL)
+            {
+
+                head = lhs;
+                tail = lhs;
+            }
+            else
+            {
+                tail -> next = lhs;
+                tail = lhs;
+            }
+
+            lhs = lhs -> next;
+            tail -> next = NULL;
+        }
+
+
+        //right smaller than left
+        else
+        {
+            if (tail == NULL)
+            {
+                head = rhs;
+                tail = rhs;
+            }
+            else
+            {
+                tail -> next = rhs;
+                tail = rhs;
+            }
+
+            rhs = rhs -> next;
+            tail -> next = NULL;
+        }
+    }
+
+    if(lhs == NULL)
+    {
+        tail -> next = rhs;
+    }
+    else
+    {
+        tail -> next = lhs;
+    }
+    return head;
+}
+
+//--	To sort out the allTask queue
+
+Q * FEL_sort(Q * list, int (compar)(int, int))
+{
+    int length = qLength ( list );
+
+    if (length == 0 || length == 1)
+    {
+        return list;
+    }
+
+    //split into 2 lists
+    int half_length = length / 2;
+
+    Q * left_list = list;
+
+    Q * temp_list = list;
+    while ( (--half_length) > 0 )
+    {
+        temp_list = temp_list -> next;
+    }
+
+    Q * right_list = temp_list -> next;
+    temp_list -> next = NULL;
+
+    //recursive call
+    left_list = FEL_sort(left_list, compar);
+    right_list = FEL_sort(right_list, compar);
+
+    //merge lists
+    return FEL_merge (left_list, right_list, compar);
+}
+
+//-- generate random X
+
+double randomX ( )
+{
+    double x = ((double) rand() / (double) RAND_MAX );
+
+    return x;
+}
+
+//-- generate random R
+
+double randomR ( double rate )
+{
+    double x = randomX ();
+    double r = ( (double)(-1/rate) * (double)(log( 1 - x )) );
+
+    return r;
+}
+
+//-- generate random numSubTasks
+
+int calcNumSubtasks ( )
+{
+    int numSubTasks = rand() % 32 + 1;
+
+    return numSubTasks;
+}
+
+//-- generate random arrival time
+
+int calcArrivalTime ( int prevArrTime, double arrRate )
+{
+    double r = randomR ( arrRate );
+
+    int intArrivalTime = (int)(ceil(( 10 * (arrRate) * (exp( -( arrRate * r ))) )));
+
+    int arrivalTime = prevArrTime + intArrivalTime;
+
+    return arrivalTime;
+}
+
+//-- generate random service time
+
+int calcServiceTime ( double mu )
+{
+    double r = randomR ( mu );
+    int serviceTime = (int)(ceil(( 10 * (mu) * (exp( -( mu * r ))) )));
+
+    return serviceTime;
 }
