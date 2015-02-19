@@ -98,7 +98,6 @@ void runSimulation( char * filename )
 
     Q * task = NULL;
 
-
     /*
     Read file line by line
     *	Put elements in apt queue ( 0 / 1 )
@@ -201,7 +200,16 @@ void runSimulation( char * filename )
                 for ( i = 0; i < task -> numSubTasks; i++ )
                 {
                     sub * subTask = subCreate( task -> subtasks[i], time );
-
+                    cpu += subTask -> subDuration;
+                    totalNumSubtasks++;
+                    if( subTask -> subDuration > mewMin )
+                    {
+                        mewMin = subTask -> subDuration;
+                    }
+                    if( subTask -> subDuration < mewMax )
+                    {
+                        mewMax = subTask -> subDuration;
+                    }
                     //push subtasks
                     subPush( subTask, &processQ );
                 }
@@ -243,9 +251,9 @@ void runSimulation( char * filename )
     printf( "Total time cpus = %f\nTotal num subtasks = %f\n", cpu, totalNumSubtasks );
     printf( "mewMin = %f\nmewMax = %f\navgmew = %f\n", mewMin, mewMax, avgMew );
 
-    printf( "Average Queue Length: %.2f\n", avgQLength );
     printf( "Average Wait Time 0: %.2f\n", avgWaitTime0 );
     printf( "Average Wait Time 1: %.2f\n", avgWaitTime1 );
+    printf( "Average Queue Length: %.2f\n", avgQLength );
     printf( "Average Processor Utilization: %.2f\n", avgCPU );
     printf( "Average Load Balancing factor: %.2f\n", avgLBF );
 
